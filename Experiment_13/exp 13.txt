@@ -1,0 +1,70 @@
+#include <Arduino_FreeRTOS.h>
+#include <queue.h>
+#include <stream_buffer.h>
+
+#define STREAM_BUFFER_SIZE 32
+
+StreamBufferHandle_t dataStream;
+QueueHandle_t mailbox;
+
+void producerTask(void *pvParameters) {
+  uint8_t value = 0;
+
+  for (;;) {
+    value++;
+
+    xStreamBufferSend(dataStream, &value, sizeof(value),
+                      pdMS_TO_TICKS(100));
+
+    xQueueOverwrite(mailbox, &value);
+
+    Serial.print("Producer: ");
+    Serial.println(value);
+
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
+}
+
+void consumerTask(void *pvParameters) {
+  uint8_t received;
+
+  for (;;) {
+    size_t count = xStreamBufferReceive(
+      dataStream, &received, sizeof(received), portMAX_DELAY);
+
+    if (count > 0) {
+      Serial.print("Consumer: ");
+      Serial.println(received);
+    }
+  }
+}
+
+void mailboxTask(void *pvParameters) {
+  uint8_t value;
+
+  for (;;) {
+    if (xQueueReceive(mailbox, &value, portMAX_DELAY) == pdPASS) {
+      Serial.print("Mailbox: ");
+      Serial.println(value);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  dataStream = xStreamBufferCreate(STREAM_BUFFER_SIZE, 1);
+  mailbox = xQueueCreate(1, sizeof(uint8_t));
+
+  if (dataStream == NULL || mailbox == NULL) {
+    Serial.println("Memory allocation failed");
+    for (;;) {}
+  }
+
+  xTaskCreate(producerTask, "Producer", 160, NULL, 2, NULL);
+  xTaskCreate(consumerTask, "Consumer", 160, NULL, 2, NULL);
+  xTaskCreate(mailboxTask, "Mailbox", 160, NULL, 1, NULL);
+}
+
+void loop() {
+}
