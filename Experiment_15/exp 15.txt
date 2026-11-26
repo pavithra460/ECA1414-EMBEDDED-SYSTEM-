@@ -1,0 +1,71 @@
+#include <Arduino_FreeRTOS.h>
+#include <queue.h>
+
+#define BUTTON_PIN 2
+
+QueueHandle_t interruptQueue;
+
+volatile uint8_t interruptCount = 0;
+
+void buttonISR() {
+  BaseType_t higherPriorityTaskWoken = pdFALSE;
+  uint8_t event = 1;
+
+  xQueueSendFromISR(
+    interruptQueue,
+    &event,
+    &higherPriorityTaskWoken
+  );
+
+  portYIELD_FROM_ISR(higherPriorityTaskWoken);
+}
+
+void deferredTask(void *pvParameters) {
+  uint8_t event;
+
+  for (;;) {
+    if (xQueueReceive(interruptQueue, &event, portMAX_DELAY) == pdPASS) {
+
+      interruptCount++;
+
+      Serial.print("Interrupt processed: ");
+      Serial.println(interruptCount);
+
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  interruptQueue = xQueueCreate(5, sizeof(uint8_t));
+
+  if (interruptQueue == NULL) {
+    Serial.println("Queue creation failed");
+    for (;;) {}
+  }
+
+  xTaskCreate(
+    deferredTask,
+    "DeferredTask",
+    180,
+    NULL,
+    2,
+    NULL
+  );
+
+  attachInterrupt(
+    digitalPinToInterrupt(BUTTON_PIN),
+    buttonISR,
+    FALLING
+  );
+
+  Serial.println("Press button connected to D2 and GND");
+}
+
+void loop() {
+}
