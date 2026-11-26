@@ -1,0 +1,44 @@
+#include <systemc.h>
+
+SC_MODULE(ProductionLine)
+{
+    SC_CTOR(ProductionLine)
+    {
+        SC_THREAD(production);
+    }
+
+    void production()
+    {
+        for (int i = 1; i <= 5; i++)
+        {
+            cout << sc_time_stamp()
+                 << " Product " << i
+                 << " entering Assembly" << endl;
+
+            wait(5, SC_NS);
+
+            cout << sc_time_stamp()
+                 << " Product " << i
+                 << " entering Inspection" << endl;
+
+            wait(3, SC_NS);
+
+            cout << sc_time_stamp()
+                 << " Product " << i
+                 << " entering Packaging" << endl;
+
+            wait(2, SC_NS);
+
+            cout << sc_time_stamp()
+                 << " Product " << i
+                 << " completed" << endl;
+        }
+    }
+};
+
+int sc_main(int argc, char* argv[])
+{
+    ProductionLine factory("factory");
+    sc_start();
+    return 0;
+}
