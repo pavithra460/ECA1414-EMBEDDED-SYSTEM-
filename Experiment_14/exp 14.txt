@@ -1,0 +1,79 @@
+#include <Arduino_FreeRTOS.h>
+#include <timers.h>
+#include <event_groups.h>
+
+#define EVENT_A (1 << 0)
+#define EVENT_B (1 << 1)
+
+TimerHandle_t ledTimer;
+EventGroupHandle_t events;
+
+void timerCallback(TimerHandle_t timer) {
+  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+}
+
+void taskA(void *pvParameters) {
+  for (;;) {
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    Serial.println("Task A completed");
+    xEventGroupSetBits(events, EVENT_A);
+  }
+}
+
+void taskB(void *pvParameters) {
+  for (;;) {
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    Serial.println("Task B completed");
+    xEventGroupSetBits(events, EVENT_B);
+  }
+}
+
+void eventTask(void *pvParameters) {
+  for (;;) {
+    xEventGroupWaitBits(
+      events,
+      EVENT_A | EVENT_B,
+      pdTRUE,
+      pdTRUE,
+      portMAX_DELAY
+    );
+
+    Serial.println("Both events received");
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  events = xEventGroupCreate();
+
+  if (events == NULL) {
+    Serial.println("Event group creation failed");
+    for (;;) {}
+  }
+
+  ledTimer = xTimerCreate(
+    "LED Timer",
+    pdMS_TO_TICKS(500),
+    pdTRUE,
+    NULL,
+    timerCallback
+  );
+
+  if (ledTimer == NULL) {
+    Serial.println("Timer creation failed");
+    for (;;) {}
+  }
+
+  xTimerStart(ledTimer, 0);
+
+  xTaskCreate(taskA, "TaskA", 160, NULL, 1, NULL);
+  xTaskCreate(taskB, "TaskB", 160, NULL, 1, NULL);
+  xTaskCreate(eventTask, "EventTask", 180, NULL, 2, NULL);
+}
+
+void loop() {
+}
