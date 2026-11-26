@@ -1,0 +1,99 @@
+#include <Arduino_FreeRTOS.h>
+#include <semphr.h>
+
+SemaphoreHandle_t sharedMutex;
+SemaphoreHandle_t lowHasMutex;
+
+void lowPriorityTask(void *pvParameters) {
+  for (;;) {
+
+    if (xSemaphoreTake(sharedMutex, portMAX_DELAY) == pdPASS) {
+
+      Serial.println("LOW: Mutex acquired");
+
+      xSemaphoreGive(lowHasMutex);
+
+      Serial.println("LOW: Working with shared resource");
+
+      unsigned long startTime = millis();
+
+      while (millis() - startTime < 1500UL) {
+        // Simulated work while holding mutex
+      }
+
+      Serial.println("LOW: Releasing mutex");
+
+      xSemaphoreGive(sharedMutex);
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(3000));
+  }
+}
+
+void highPriorityTask(void *pvParameters) {
+  for (;;) {
+
+    xSemaphoreTake(lowHasMutex, portMAX_DELAY);
+
+    Serial.println("HIGH: Requesting mutex");
+
+    xSemaphoreTake(sharedMutex, portMAX_DELAY);
+
+    Serial.println("HIGH: Mutex acquired");
+
+    xSemaphoreGive(sharedMutex);
+
+    vTaskDelay(pdMS_TO_TICKS(4000));
+  }
+}
+
+void mediumPriorityTask(void *pvParameters) {
+  for (;;) {
+
+    Serial.println("MEDIUM: Task running");
+
+    vTaskDelay(pdMS_TO_TICKS(250));
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  sharedMutex = xSemaphoreCreateMutex();
+  lowHasMutex = xSemaphoreCreateBinary();
+
+  if (sharedMutex == NULL || lowHasMutex == NULL) {
+    Serial.println("Semaphore creation failed");
+    for (;;) {}
+  }
+
+  xTaskCreate(
+    lowPriorityTask,
+    "LOW",
+    180,
+    NULL,
+    1,
+    NULL
+  );
+
+  xTaskCreate(
+    mediumPriorityTask,
+    "MEDIUM",
+    180,
+    NULL,
+    2,
+    NULL
+  );
+
+  xTaskCreate(
+    highPriorityTask,
+    "HIGH",
+    180,
+    NULL,
+    3,
+    NULL
+  );
+}
+
+void loop() {
+}
